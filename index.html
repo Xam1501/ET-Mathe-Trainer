@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>ET Skill Trainer</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #121212; 
+            color: #ffffff; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            touch-action: manipulation; 
+        }
+        #app { 
+            text-align: center; 
+            width: 100%; 
+            max-width: 400px; 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+        .card { 
+            background: #1e1e1e; 
+            border-radius: 15px; 
+            padding: 40px 20px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+            margin-bottom: 30px; 
+            min-height: 250px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+        }
+        .category-text { 
+            font-size: 1em; 
+            color: #9ca3af; 
+            margin-bottom: 15px; 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #question { 
+            font-size: 3.5em; 
+            font-weight: bold; 
+            margin: 0; 
+        }
+        #answer { 
+            font-size: 2.5em; 
+            color: #4ade80; 
+            margin-top: 25px; 
+            opacity: 0; 
+            transition: opacity 0.15s ease-in-out; 
+        }
+        #answer.visible { 
+            opacity: 1; 
+        }
+        button { 
+            background: #2563eb; 
+            color: white; 
+            border: none; 
+            padding: 18px 30px; 
+            font-size: 1.3em; 
+            border-radius: 12px; 
+            font-weight: bold;
+            cursor: pointer; 
+            width: 100%; 
+            touch-action: manipulation; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button:active { 
+            background: #1d4ed8; 
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <div class="card" id="flashcard">
+            <div class="category-text" id="category">Dein Training</div>
+            <div id="question">Bereit?</div>
+            <div id="answer">Tippe auf Start</div>
+        </div>
+        <button id="actionBtn">Starten</button>
+    </div>
+
+    <script>
+        // Datenbank & Aufgabengeneratoren
+        const categories = [
+            { 
+                name: "Quadratzahlen", 
+                generator: () => { 
+                    const x = Math.floor(Math.random() * 20) + 1; 
+                    return { q: `${x}²`, a: x * x }; 
+                } 
+            },
+            { 
+                name: "Zweierpotenzen", 
+                generator: () => { 
+                    const x = Math.floor(Math.random() * 11); 
+                    return { q: `2^${x}`, a: Math.pow(2, x) }; 
+                } 
+            },
+            { 
+                name: "ET-Wurzeln", 
+                pool: [
+                    {q: "√2", a: "≈ 1.414"}, 
+                    {q: "√3", a: "≈ 1.732"}, 
+                    {q: "1 / √2", a: "≈ 0.707"}, 
+                    {q: "1 / √3", a: "≈ 0.577"}
+                ]
+            },
+            { 
+                name: "Trigonometrie", 
+                pool: [
+                    {q: "sin(30°)", a: "0.5"}, {q: "cos(60°)", a: "0.5"}, 
+                    {q: "cos(45°)", a: "≈ 0.707"}, {q: "sin(45°)", a: "≈ 0.707"},
+                    {q: "cos(120°)", a: "-0.5"}, {q: "sin(120°)", a: "≈ 0.866"},
+                    {q: "tan(45°)", a: "1"}
+                ]
+            },
+            { 
+                name: "Multiplikation", 
+                generator: () => {
+                    const a = Math.floor(Math.random() * 89) + 11; 
+                    const b = Math.floor(Math.random() * 8) + 2;   
+                    return { q: `${a} · ${b}`, a: a * b };
+                }
+            },
+            { 
+                name: "Division", 
+                generator: () => {
+                    const divisor = Math.floor(Math.random() * 11) + 2; 
+                    const ergebnis = Math.floor(Math.random() * 20) + 2; 
+                    
+                    const isHalf = Math.random() > 0.7;
+                    if(isHalf) {
+                        const divididend = (divisor * ergebnis) + (divisor / 2);
+                        if (divididend % 1 === 0) {
+                            return { q: `${divididend} / ${divisor}`, a: ergebnis + 0.5 };
+                        }
+                    }
+                    
+                    const divididend = divisor * ergebnis;
+                    return { q: `${divididend} / ${divisor}`, a: ergebnis };
+                }
+            }
+        ];
+
+        let currentState = 'start'; 
+        const actionBtn = document.getElementById('actionBtn');
+        const questionEl = document.getElementById('question');
+        const answerEl = document.getElementById('answer');
+        const categoryEl = document.getElementById('category');
+
+        function getRandomTask() {
+            const cat = categories[Math.floor(Math.random() * categories.length)];
+            let task;
+            if (cat.generator) {
+                task = cat.generator();
+            } else {
+                task = cat.pool[Math.floor(Math.random() * cat.pool.length)];
+            }
+            return { category: cat.name, ...task };
+        }
+
+        actionBtn.addEventListener('click', () => {
+            if (navigator.vibrate) navigator.vibrate(10);
+
+            if (currentState === 'start' || currentState === 'answer') {
+                const currentTask = getRandomTask();
+                categoryEl.textContent = currentTask.category;
+                questionEl.textContent = currentTask.q;
+                answerEl.textContent = currentTask.a;
+                
+                answerEl.classList.remove('visible');
+                actionBtn.textContent = 'Lösung aufdecken';
+                currentState = 'question';
+            } else if (currentState === 'question') {
+                answerEl.classList.add('visible');
+                actionBtn.textContent = 'Nächste Aufgabe';
+                currentState = 'answer';
+            }
+        });
+
+        // Service Worker Registrierung für Offline-Modus
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registriert'))
+                    .catch(err => console.error('Service Worker Fehler', err));
+            });
+        }
+    </script>
+</body>
+</html>
