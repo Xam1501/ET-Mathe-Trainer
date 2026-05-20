@@ -33,11 +33,12 @@
             border-radius: 15px; 
             padding: 40px 20px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
-            margin-bottom: 30px; 
+            margin-bottom: 20px; 
             min-height: 250px; 
             display: flex; 
             flex-direction: column; 
             justify-content: center; 
+            align-items: center;
         }
         .category-text { 
             font-size: 1em; 
@@ -49,35 +50,57 @@
         #question { 
             font-size: 3.5em; 
             font-weight: bold; 
-            margin: 0; 
+            margin: 0 0 20px 0; 
         }
-        #answer { 
-            font-size: 2.5em; 
-            color: #4ade80; 
-            margin-top: 25px; 
-            opacity: 0; 
-            transition: opacity 0.15s ease-in-out; 
+        input[type="text"] {
+            width: 80%;
+            background: #2d2d2d;
+            border: 2px solid #3f3f46;
+            color: white;
+            font-size: 2em;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            outline: none;
+            transition: border-color 0.2s;
+            display: none;
         }
-        #answer.visible { 
-            opacity: 1; 
+        input[type="text"]:focus {
+            border-color: #2563eb;
+        }
+        #feedback {
+            height: 30px;
+            margin-top: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
         }
         button { 
             background: #2563eb; 
             color: white; 
             border: none; 
-            padding: 18px 30px; 
-            font-size: 1.3em; 
+            padding: 18px 20px; 
+            font-size: 1.2em; 
             border-radius: 12px; 
             font-weight: bold;
             cursor: pointer; 
-            width: 100%; 
+            flex-grow: 1;
             touch-action: manipulation; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
         button:active { 
-            background: #1d4ed8; 
             transform: translateY(2px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        #resolveBtn {
+            background: #4b5563;
+            display: none;
+            flex-grow: 0;
+            width: 40%;
         }
     </style>
 </head>
@@ -87,13 +110,16 @@
         <div class="card" id="flashcard">
             <div class="category-text" id="category">Dein Training</div>
             <div id="question">Bereit?</div>
-            <div id="answer">Tippe auf Start</div>
+            <input type="text" id="userInput" inputmode="decimal" placeholder="Lösung..." autocomplete="off">
+            <div id="feedback">Tippe auf Start</div>
         </div>
-        <button id="actionBtn">Starten</button>
+        <div class="button-group">
+            <button id="actionBtn">Starten</button>
+            <button id="resolveBtn">Auflösen</button>
+        </div>
     </div>
 
     <script>
-        // Datenbank & Aufgabengeneratoren
         const categories = [
             { 
                 name: "Quadratzahlen", 
@@ -112,19 +138,19 @@
             { 
                 name: "ET-Wurzeln", 
                 pool: [
-                    {q: "√2", a: "≈ 1.414"}, 
-                    {q: "√3", a: "≈ 1.732"}, 
-                    {q: "1 / √2", a: "≈ 0.707"}, 
-                    {q: "1 / √3", a: "≈ 0.577"}
+                    {q: "√2", a: 1.414}, 
+                    {q: "√3", a: 1.732}, 
+                    {q: "1 / √2", a: 0.707}, 
+                    {q: "1 / √3", a: 0.577}
                 ]
             },
             { 
                 name: "Trigonometrie", 
                 pool: [
-                    {q: "sin(30°)", a: "0.5"}, {q: "cos(60°)", a: "0.5"}, 
-                    {q: "cos(45°)", a: "≈ 0.707"}, {q: "sin(45°)", a: "≈ 0.707"},
-                    {q: "cos(120°)", a: "-0.5"}, {q: "sin(120°)", a: "≈ 0.866"},
-                    {q: "tan(45°)", a: "1"}
+                    {q: "sin(30°)", a: 0.5}, {q: "cos(60°)", a: 0.5}, 
+                    {q: "cos(45°)", a: 0.707}, {q: "sin(45°)", a: 0.707},
+                    {q: "cos(120°)", a: -0.5}, {q: "sin(120°)", a: 0.866},
+                    {q: "tan(45°)", a: 1}
                 ]
             },
             { 
@@ -156,9 +182,13 @@
         ];
 
         let currentState = 'start'; 
+        let currentTask = null;
+
         const actionBtn = document.getElementById('actionBtn');
+        const resolveBtn = document.getElementById('resolveBtn');
         const questionEl = document.getElementById('question');
-        const answerEl = document.getElementById('answer');
+        const userInput = document.getElementById('userInput');
+        const feedbackEl = document.getElementById('feedback');
         const categoryEl = document.getElementById('category');
 
         function getRandomTask() {
@@ -172,30 +202,80 @@
             return { category: cat.name, ...task };
         }
 
+        function loadNewTask() {
+            currentTask = getRandomTask();
+            categoryEl.textContent = currentTask.category;
+            questionEl.textContent = currentTask.q;
+            
+            userInput.style.display = 'block';
+            userInput.value = '';
+            userInput.focus();
+            
+            feedbackEl.textContent = '';
+            actionBtn.textContent = 'Prüfen';
+            actionBtn.style.background = '#2563eb';
+            
+            resolveBtn.style.display = 'block';
+            currentState = 'question';
+        }
+
+        function checkAnswer() {
+            // Kommas in Punkte umwandeln und als Float parsen
+            const userNum = parseFloat(userInput.value.replace(',', '.'));
+            const correctNum = parseFloat(currentTask.a);
+
+            if (!isNaN(userNum) && Math.abs(userNum - correctNum) < 0.005) {
+                feedbackEl.textContent = 'Richtig!';
+                feedbackEl.style.color = '#4ade80';
+                userInput.style.borderColor = '#4ade80';
+                actionBtn.textContent = 'Nächste Aufgabe';
+                actionBtn.style.background = '#16a34a';
+                resolveBtn.style.display = 'none';
+                currentState = 'answer';
+            } else {
+                feedbackEl.textContent = 'Falsch, probier nochmal!';
+                feedbackEl.style.color = '#ef4444';
+                userInput.style.borderColor = '#ef4444';
+                // Kurzes Wackeln des Feldes (optionales Feedback)
+                userInput.style.transform = 'translateX(5px)';
+                setTimeout(() => userInput.style.transform = 'translateX(-5px)', 50);
+                setTimeout(() => userInput.style.transform = 'translateX(0)', 100);
+            }
+        }
+
         actionBtn.addEventListener('click', () => {
             if (navigator.vibrate) navigator.vibrate(10);
 
             if (currentState === 'start' || currentState === 'answer') {
-                const currentTask = getRandomTask();
-                categoryEl.textContent = currentTask.category;
-                questionEl.textContent = currentTask.q;
-                answerEl.textContent = currentTask.a;
-                
-                answerEl.classList.remove('visible');
-                actionBtn.textContent = 'Lösung aufdecken';
-                currentState = 'question';
+                userInput.style.borderColor = '#3f3f46';
+                loadNewTask();
             } else if (currentState === 'question') {
-                answerEl.classList.add('visible');
-                actionBtn.textContent = 'Nächste Aufgabe';
-                currentState = 'answer';
+                checkAnswer();
             }
         });
 
-        // Service Worker Registrierung für Offline-Modus
+        resolveBtn.addEventListener('click', () => {
+            userInput.value = currentTask.a;
+            userInput.style.borderColor = '#fbbf24';
+            feedbackEl.textContent = 'Aufgelöst.';
+            feedbackEl.style.color = '#fbbf24';
+            actionBtn.textContent = 'Nächste Aufgabe';
+            actionBtn.style.background = '#2563eb';
+            resolveBtn.style.display = 'none';
+            currentState = 'answer';
+        });
+
+        // Bestätigen per Enter-Taste auf dem Handy/PC
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Verhindert das Neuladen der Seite
+                actionBtn.click();
+            }
+        });
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('Service Worker registriert'))
                     .catch(err => console.error('Service Worker Fehler', err));
             });
         }
